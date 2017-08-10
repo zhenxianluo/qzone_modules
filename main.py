@@ -1,23 +1,50 @@
 #coding:utf-8
 from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+from selenium.webdriver.common.keys import Keys
 import ipdb, json, time, requests, os
+from dotenv import load_dotenv, find_dotenv
+# 自动查找并加载.env文件里的环境变量
+load_dotenv(find_dotenv())
 #from friends import friends
 #from bs4 import BeautifulSoup as BS
-cap = DesiredCapabilities.CHROME
-cap["phantomjs.page.settings.resourceTimeout"] = 120
-cap["phantomjs.page.settings.loadImages"] = False
-driver = webdriver.Chrome(executable_path=r'/usr/local/bin/chromedriver', desired_capabilities=cap)
+chromeOptions = webdriver.ChromeOptions()
+prefs = {"profile.managed_default_content_settings.images":2}
+chromeOptions.add_experimental_option("prefs",prefs)
+#driver = webdriver.Chrome(executable_path=r'/usr/local/bin/chromedriver',\
+#                          chrome_options=chromeOptions)
+driver = webdriver.Chrome(executable_path=r'/usr/bin/chromedriver',\
+                          chrome_options=chromeOptions)
 driver.maximize_window()
-driver.get('https://qzone.qq.com/')
+cookie_file = 'website_cookie.json'
+base_url = u'https://qzone.qq.com/'
+driver.get(base_url)
+if os.path.exists(cookie_file):
+    with open(cookie_file, 'rb') as f:
+        cookie_read = f.read()
+        if cookie_read:
+            driver.delete_all_cookies()
+            for item in json.loads(cookie_read):
+                driver.add_cookie(item)
+            driver.refresh()
+if driver.current_url == base_url:
+    driver.delete_all_cookies()
+    # begin login
+    login_frame = driver.find_element_by_id("login_frame")
+    driver.switch_to_frame(login_frame)
+    driver.find_element_by_id('switcher_plogin').click()
+    driver.find_element_by_id('u').send_keys(os.environ.get('num'))
+    driver.find_element_by_id('p').send_keys(os.environ.get('num_p'))
+    driver.find_element_by_id('login_button').send_keys(Keys.ENTER)
+    # end
+    # begin save cookie
+    cookie_str = json.dumps(driver.get_cookies())
+    open('website_cookie.json', 'ab').write(cookie_str)
+    # end
 root_dir = 'friend_photo'
 if not os.path.exists(root_dir):
     os.mkdir(root_dir)
-user = '16415*9969'
+user = os.environ.get('num_f')
 url = 'https://user.qzone.qq.com/'
-ipdb.set_trace()
-
 screen_blow = """
 var scrollTop = document.documentElement.scrollTop || window.pageYOffset || document.body.scrollTop;
 if(document.documentElement.scrollHeight == document.documentElement.clientHeight + scrollTop){
@@ -43,6 +70,7 @@ while select_ph < len(driver.find_elements_by_class_name('js-album-cover')):
     while driver.find_element_by_tag_name('body').get_attribute('haha') != 'blow':
         driver.execute_script("window.scrollBy(0,500)")
         driver.execute_script(screen_blow)
+    driver.execute_script("window.scrollTo(0,0)")
     driver.switch_to_frame(sub_frame)
     imgs = driver.find_elements_by_class_name('j-pl-photoitem-img')
     for i, img in enumerate(imgs):
@@ -55,8 +83,5 @@ while select_ph < len(driver.find_elements_by_class_name('js-album-cover')):
             open(user_dir+os.sep+str(i)+'.jpg', 'wb').write(r.content)
             i = i + 1
             print "you are download the %d photo, and also %d" % (i, len(imgs)-i)
-    driver.switch_to_default_content()
-    driver.execute_script("window.scrollTo(0,0)")
-    driver.switch_to_frame(sub_frame)
     driver.find_elements_by_class_name('js-select')[0].click() #点击进入好友相册
 driver.quit()

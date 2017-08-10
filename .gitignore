@@ -2,3 +2,6 @@ friends.py
 data.py
 *.pyc
 *.swp
+website_cookie.json
+.env
+friend_photo/*
