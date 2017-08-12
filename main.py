@@ -7,27 +7,46 @@ from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv())
 #from friends import friends
 #from bs4 import BeautifulSoup as BS
-chromeOptions = webdriver.ChromeOptions()
-prefs = {"profile.managed_default_content_settings.images":2}
-chromeOptions.add_experimental_option("prefs",prefs)
-#driver = webdriver.Chrome(executable_path=r'/usr/local/bin/chromedriver',\
-#                          chrome_options=chromeOptions)
-driver = webdriver.Chrome(executable_path=os.environ.get('chrome_path'),\
-                          chrome_options=chromeOptions)
-driver.maximize_window()
-cookie_file = 'website_cookie.json'
-base_url = u'https://qzone.qq.com/'
-driver.get(base_url)
-if os.path.exists(cookie_file):
+def path_handle(photo_file):
+    """
+    对路径字符串进行安全处理，并新建文件夹，返回处理后的字符串
+    """
+    import re
+    photo_file = re.sub(' ', '', photo_file)
+    pf = os.path.split(photo_file)
+    if not os.path.exists(pf[0]):
+        os.makedirs(pf[0])
+    return photo_file
+def driver_init():
+    """
+    初始化浏览器并返回操作句柄
+    """
+    chromeOptions = webdriver.ChromeOptions()
+    prefs = {"profile.managed_default_content_settings.images":2}
+    chromeOptions.add_experimental_option("prefs",prefs)
+    driver = webdriver.Chrome(executable_path=os.environ.get('chrome_path'),\
+                            chrome_options=chromeOptions)
+    driver.maximize_window()
+    return driver
+def write_cookie(cookie_file, driver):
+    """
+    读取cookie并写入浏览器
+    """
     with open(cookie_file, 'rb') as f:
         cookie_read = f.read()
-        if cookie_read:
+        if cookie_read.strip():
             driver.delete_all_cookies()
-            for item in json.loads(cookie_read):
-                driver.add_cookie(item)
-            driver.refresh()
-            time.sleep(5)
-if driver.current_url == base_url:
+            try:
+                for item in json.loads(cookie_read):
+                    driver.add_cookie(item)
+            except Exception, e:
+                pass
+        else:
+            return
+def login(driver):
+    """
+    登录，成功后写入cookie到本地
+    """
     driver.delete_all_cookies()
     # begin login
     login_frame = driver.find_element_by_id("login_frame")
@@ -40,55 +59,76 @@ if driver.current_url == base_url:
     while driver.current_url == base_url: time.sleep(1)
     # begin save cookie
     cookie_str = json.dumps(driver.get_cookies())
-    open('website_cookie.json', 'ab').write(cookie_str)
+    open('website_cookie.json', 'wb').write(cookie_str)
+    print "cookies已经保存到本地"
     # end
+driver = driver_init()
+cookie_file = 'website_cookie.json'
+base_url = u'https://qzone.qq.com/'
+driver.get(base_url)
+print "检测并读取本地cookie"
+if os.path.exists(cookie_file):
+    write_cookie(cookie_file, driver)
+if driver.current_url.find('i.qq.com') > -1 or driver.current_url == base_url:
+    login(driver)
+print '登录成功'
 root_dir = 'friend_photo'
-if not os.path.exists(root_dir):
-    os.mkdir(root_dir)
 user = os.environ.get('num_f')
 url = 'https://user.qzone.qq.com/'
 screen_blow = """
 var scrollTop = document.documentElement.scrollTop || window.pageYOffset || document.body.scrollTop;
-if(document.documentElement.scrollHeight == document.documentElement.clientHeight + scrollTop){
-    document.getElementsByTagName('body')[0].setAttribute('haha', 'blow')
+if(Math.abs(document.documentElement.scrollHeight - document.documentElement.clientHeight - scrollTop) < 10){
+    document.getElementsByTagName('body')[0].setAttribute('haha', 'blow');
 }
 """
-screen_origin = "document.getElementsByTagName('body')[0].setAttribute('haha', 'origin')"
+screen_origin = "window.scrollTo(0,0);document.getElementsByTagName('body')[0].setAttribute('haha', 'origin');"
 driver.get(url + user)
 user_dir = root_dir + os.sep + driver.find_elements_by_class_name('textoverflow')[1].text
-if not os.path.exists(user_dir):
-    os.mkdir(user_dir)
+print "成功进入好友空间：", user, user_dir
 btn_sure = driver.find_elements_by_class_name('btn-fs-sure')
 if len(btn_sure) > 0: btn_sure[0].click()
 el =  WebDriverWait(driver, 10).until(lambda x: x.find_elements_by_class_name('menu_item_4'))
+print "进入好友相册"
 el[1].click()
 #driver.find_elements_by_class_name('menu_item_4')[1].click() #点击进入好友相册
-sub_frame = driver.find_element_by_id("tphoto")
+sub_frame = WebDriverWait(driver, 10).until(lambda x: x.find_element_by_id("tphoto"))
 driver.switch_to_frame(sub_frame)
-select_ph = 0
+select_ph = 3 #控制第几个相册
 while select_ph < len(driver.find_elements_by_class_name('js-album-cover')):
     ph = driver.find_elements_by_class_name('js-album-cover')[select_ph]
     select_ph += 1
-    i=0
     ph.click() #点击进入独立相册
+    try:
+        photo_name = driver.find_elements_by_class_name('j-pl-albuminfo-title')[1].text
+    except Exception,e:
+        photo_name = driver.find_element_by_css_selector('.profile .tit').text
+    print "进入独立子相册:", photo_name
+    photo_dir = user_dir + os.sep + photo_name
     driver.switch_to_default_content()
     while driver.find_element_by_tag_name('body').get_attribute('haha') != 'blow':
         driver.execute_script("window.scrollBy(0,500)")
         driver.execute_script(screen_blow)
         time.sleep(0.5)
+    print "滚动条已到最底部"
     driver.execute_script(screen_origin)
-    driver.execute_script("window.scrollTo(0,0)")
     driver.switch_to_frame(sub_frame)
     imgs = driver.find_elements_by_class_name('j-pl-photoitem-img')
+    if len(imgs) == 0:
+        imgs = driver.find_elements_by_css_selector('.area-portrait-inner>a>img')
+    imgs.reverse()
+    titles = driver.find_elements_by_class_name('item-tit')
+    titles.reverse()
     for i, img in enumerate(imgs):
         try:
-            #r = requests.get(img.get_attribute('src').replace('/m/', '/b/'))
+            img_url = img.get_attribute('src').replace('/m/', '/b/') #s：小图，m：中图，b：大图
+            r = requests.get(img_url)
         except Exception, e:
             print i, 'error'
             continue
         if r.status_code == 200:
-            #open(user_dir+os.sep+str(i)+'.jpg', 'wb').write(r.content)
-            i = i + 1
-            print "you are download the %d photo, and also %d" % (i, len(imgs)-i)
+            photo_file = photo_dir + os.sep + '<' + str(i) + '>' + (titles[i].text if len(titles) else '') + '.jpg'
+            photo_file = path_handle(photo_file)
+            print "%s : %d -----> %d" % (photo_file, i, len(imgs)-i)
+            open(photo_file, 'wb+').write(r.content)
     driver.find_elements_by_class_name('js-select')[0].click() #点击进入好友相册
 driver.quit()
