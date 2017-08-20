@@ -2,7 +2,8 @@
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
-import ipdb, json, time, requests, os
+from PIL import Image
+import ipdb, json, time, requests, os, StringIO
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv())
 #from friends import friends
@@ -22,7 +23,7 @@ def driver_init():
     初始化浏览器并返回操作句柄
     """
     chromeOptions = webdriver.ChromeOptions()
-    prefs = {"profile.managed_default_content_settings.images":2}
+    prefs = {}#{"profile.managed_default_content_settings.images":2}
     chromeOptions.add_experimental_option("prefs",prefs)
     driver = webdriver.Chrome(executable_path=os.environ.get('chrome_path'),\
                             chrome_options=chromeOptions)
@@ -51,10 +52,16 @@ def login(driver):
     # begin login
     login_frame = driver.find_element_by_id("login_frame")
     driver.switch_to_frame(login_frame)
-    driver.find_element_by_id('switcher_plogin').click()
-    driver.find_element_by_id('u').send_keys(os.environ.get('num'))
-    driver.find_element_by_id('p').send_keys(os.environ.get('num_p'))
-    driver.find_element_by_id('login_button').send_keys(Keys.ENTER)
+    #方法一通过重新读取二维码并显示用手机扫描，失败
+    #qr_url = driver.find_element_by_id('qrlogin_img').get_attribute('src')
+    #qr_data = requests.get(qr_url).content
+    #im = Image.open(StringIO.StringIO(qr_data))
+    #im.show()
+    #方法二输入帐号及密码，登录多次后会有验证
+    #driver.find_element_by_id('switcher_plogin').click()
+    #driver.find_element_by_id('u').send_keys(os.environ.get('num'))
+    #driver.find_element_by_id('p').send_keys(os.environ.get('num_p'))
+    #driver.find_element_by_id('login_button').send_keys(Keys.ENTER)
     # end
     while driver.current_url == base_url: time.sleep(1)
     # begin save cookie
@@ -93,42 +100,57 @@ el[1].click()
 #driver.find_elements_by_class_name('menu_item_4')[1].click() #点击进入好友相册
 sub_frame = WebDriverWait(driver, 10).until(lambda x: x.find_element_by_id("tphoto"))
 driver.switch_to_frame(sub_frame)
-select_ph = 3 #控制第几个相册
+ipdb.set_trace()
+select_ph = 13 #控制第几个相册
 while select_ph < len(driver.find_elements_by_class_name('js-album-cover')):
     ph = driver.find_elements_by_class_name('js-album-cover')[select_ph]
     select_ph += 1
     ph.click() #点击进入独立相册
     try:
-        photo_name = driver.find_elements_by_class_name('j-pl-albuminfo-title')[1].text
-    except Exception,e:
-        photo_name = driver.find_element_by_css_selector('.profile .tit').text
-    print "进入独立子相册:", photo_name
-    photo_dir = user_dir + os.sep + photo_name
-    driver.switch_to_default_content()
-    while driver.find_element_by_tag_name('body').get_attribute('haha') != 'blow':
-        driver.execute_script("window.scrollBy(0,500)")
-        driver.execute_script(screen_blow)
-        time.sleep(0.5)
-    print "滚动条已到最底部"
-    driver.execute_script(screen_origin)
-    driver.switch_to_frame(sub_frame)
-    imgs = driver.find_elements_by_class_name('j-pl-photoitem-img')
-    if len(imgs) == 0:
-        imgs = driver.find_elements_by_css_selector('.area-portrait-inner>a>img')
-    imgs.reverse()
-    titles = driver.find_elements_by_class_name('item-tit')
-    titles.reverse()
-    for i, img in enumerate(imgs):
+        next_page = driver.find_element_by_id('pager_next_1') or -1
+    except Exception:
+        next_page = -1
+    while next_page or next_page == -1:
         try:
-            img_url = img.get_attribute('src').replace('/m/', '/b/') #s：小图，m：中图，b：大图
-            r = requests.get(img_url)
-        except Exception, e:
-            print i, 'error'
-            continue
-        if r.status_code == 200:
-            photo_file = photo_dir + os.sep + '<' + str(i) + '>' + (titles[i].text if len(titles) else '') + '.jpg'
-            photo_file = path_handle(photo_file)
-            print "%s : %d -----> %d" % (photo_file, i, len(imgs)-i)
-            open(photo_file, 'wb+').write(r.content)
+            photo_name = driver.find_elements_by_class_name('j-pl-albuminfo-title')[1].text
+        except Exception,e:
+            photo_name = driver.find_element_by_css_selector('.profile .tit').text
+        print "进入独立子相册:", photo_name
+        photo_dir = user_dir + os.sep + photo_name
+        driver.switch_to_default_content()
+        while driver.find_element_by_tag_name('body').get_attribute('haha') != 'blow':
+            driver.execute_script("window.scrollBy(0,500)")
+            driver.execute_script(screen_blow)
+            time.sleep(0.5)
+        print "滚动条已到最底部"
+        driver.execute_script(screen_origin)
+        driver.switch_to_frame(sub_frame)
+        imgs = driver.find_elements_by_class_name('j-pl-photoitem-img')
+        if len(imgs) == 0:
+            imgs = driver.find_elements_by_css_selector('.area-portrait-inner>a>img')
+        imgs.reverse()
+        titles = driver.find_elements_by_class_name('item-tit')
+        titles.reverse()
+        for i, img in enumerate(imgs):
+            try:
+                img_url = img.get_attribute('src').replace('/m/', '/b/') #s：小图，m：中图，b：大图
+                r = requests.get(img_url)
+            except Exception, e:
+                print i, 'error'
+                continue
+            if r.status_code == 200:
+                photo_file = photo_dir + os.sep + '<' + str(i) + '>' + (titles[i].text if len(titles) else '') + '.jpg'
+                photo_file = path_handle(photo_file)
+                print "%s : %d -----> %d" % (photo_file, i, len(imgs)-i)
+                open(photo_file, 'wb+').write(r.content)
+        if next_page != -1:
+            next_page.click()
+            try:
+                next_page = driver.find_element_by_id('pager_next_1')
+            except Exception:
+                next_page = -1
+        else:
+            next_page = 0
+        ipdb.set_trace()
     driver.find_elements_by_class_name('js-select')[0].click() #点击进入好友相册
 driver.quit()
