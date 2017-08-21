@@ -19,6 +19,7 @@ def path_handle(photo_file):
     if not os.path.exists(pf[0]):
         os.makedirs(pf[0])
     return photo_file
+
 def driver_init():
     """
     初始化浏览器并返回操作句柄
@@ -32,6 +33,7 @@ def driver_init():
                             chrome_options=chromeOptions)
     driver.maximize_window()
     return driver
+
 def write_cookie(cookie_file, driver):
     """
     读取cookie并写入浏览器
@@ -46,6 +48,7 @@ def write_cookie(cookie_file, driver):
                 driver.refresh()
             except Exception, e:
                 print str(e)
+
 def login(driver):
     """
     登录，成功后写入cookie到本地
@@ -92,7 +95,10 @@ if(Math.abs(document.documentElement.scrollHeight - document.documentElement.cli
 """
 screen_origin = "window.scrollTo(0,0);document.getElementsByTagName('body')[0].setAttribute('haha', 'origin');"
 driver.get(url + user)
-user_dir = root_dir + os.sep + driver.find_elements_by_class_name('textoverflow')[1].text
+try:
+    user_dir = root_dir + os.sep + driver.find_elements_by_class_name('textoverflow')[1].text
+except Exception:
+    user_dir = root_dir + os.sep + user
 print "成功进入好友空间：", user, user_dir
 btn_sure = driver.find_elements_by_class_name('btn-fs-sure')
 if len(btn_sure) > 0: btn_sure[0].click()
@@ -103,7 +109,7 @@ time.sleep(1)
 #driver.find_elements_by_class_name('menu_item_4')[1].click() #点击进入好友相册
 sub_frame = WebDriverWait(driver, 10).until(lambda x: x.find_element_by_id("tphoto"))
 driver.switch_to_frame(sub_frame)
-select_ph = 0 #控制第几个相册
+select_ph = 1 #控制第几个相册
 while select_ph < len(driver.find_elements_by_class_name('js-album-cover')):
     ph = driver.find_elements_by_class_name('js-album-cover')[select_ph]
     select_ph += 1
