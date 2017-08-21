@@ -3,8 +3,9 @@ from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from PIL import Image
-import ipdb, json, time, requests, os, StringIO
+import ipdb, json, time, requests, os, StringIO, random
 from dotenv import load_dotenv, find_dotenv
+from useragent import user_agent_list as USER_AGENTS
 load_dotenv(find_dotenv())
 #from friends import friends
 #from bs4 import BeautifulSoup as BS
@@ -23,8 +24,10 @@ def driver_init():
     初始化浏览器并返回操作句柄
     """
     chromeOptions = webdriver.ChromeOptions()
-    prefs = {}#{"profile.managed_default_content_settings.images":2}
+    prefs = {"profile.managed_default_content_settings.images":2}
     chromeOptions.add_experimental_option("prefs",prefs)
+    chromeOptions.add_argument('lang=zh_CN.UTF-8')
+    chromeOptions.add_argument(random.choice(USER_AGENTS))
     driver = webdriver.Chrome(executable_path=os.environ.get('chrome_path'),\
                             chrome_options=chromeOptions)
     driver.maximize_window()
@@ -40,10 +43,9 @@ def write_cookie(cookie_file, driver):
             try:
                 for item in json.loads(cookie_read):
                     driver.add_cookie(item)
+                driver.refresh()
             except Exception, e:
-                pass
-        else:
-            return
+                print str(e)
 def login(driver):
     """
     登录，成功后写入cookie到本地
@@ -97,15 +99,17 @@ if len(btn_sure) > 0: btn_sure[0].click()
 el =  WebDriverWait(driver, 10).until(lambda x: x.find_elements_by_class_name('menu_item_4'))
 print "进入好友相册"
 el[1].click()
+time.sleep(1)
 #driver.find_elements_by_class_name('menu_item_4')[1].click() #点击进入好友相册
 sub_frame = WebDriverWait(driver, 10).until(lambda x: x.find_element_by_id("tphoto"))
 driver.switch_to_frame(sub_frame)
-ipdb.set_trace()
-select_ph = 13 #控制第几个相册
+select_ph = 0 #控制第几个相册
 while select_ph < len(driver.find_elements_by_class_name('js-album-cover')):
     ph = driver.find_elements_by_class_name('js-album-cover')[select_ph]
     select_ph += 1
+    photo_i = 0
     ph.click() #点击进入独立相册
+    time.sleep(1)
     try:
         next_page = driver.find_element_by_id('pager_next_1') or -1
     except Exception:
@@ -121,7 +125,7 @@ while select_ph < len(driver.find_elements_by_class_name('js-album-cover')):
         while driver.find_element_by_tag_name('body').get_attribute('haha') != 'blow':
             driver.execute_script("window.scrollBy(0,500)")
             driver.execute_script(screen_blow)
-            time.sleep(0.5)
+            time.sleep(1)
         print "滚动条已到最底部"
         driver.execute_script(screen_origin)
         driver.switch_to_frame(sub_frame)
@@ -139,7 +143,8 @@ while select_ph < len(driver.find_elements_by_class_name('js-album-cover')):
                 print i, 'error'
                 continue
             if r.status_code == 200:
-                photo_file = photo_dir + os.sep + '<' + str(i) + '>' + (titles[i].text if len(titles) else '') + '.jpg'
+                photo_i += 1
+                photo_file = photo_dir + os.sep + '<' + str(photo_i) + '>' + (titles[i].text if len(titles) else '') + '.jpg'
                 photo_file = path_handle(photo_file)
                 print "%s : %d -----> %d" % (photo_file, i, len(imgs)-i)
                 open(photo_file, 'wb+').write(r.content)
@@ -151,6 +156,5 @@ while select_ph < len(driver.find_elements_by_class_name('js-album-cover')):
                 next_page = -1
         else:
             next_page = 0
-        ipdb.set_trace()
     driver.find_elements_by_class_name('js-select')[0].click() #点击进入好友相册
 driver.quit()
