@@ -138,9 +138,7 @@ while select_ph < len(driver.find_elements_by_class_name('js-album-cover')):
         imgs = driver.find_elements_by_class_name('j-pl-photoitem-img')
         if len(imgs) == 0:
             imgs = driver.find_elements_by_css_selector('.area-portrait-inner>a>img')
-        imgs.reverse()
         titles = driver.find_elements_by_class_name('item-tit')
-        titles.reverse()
         for i, img in enumerate(imgs):
             try:
                 img_url = img.get_attribute('src').replace('/m/', '/b/') #s：小图，m：中图，b：大图
