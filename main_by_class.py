@@ -9,9 +9,12 @@ from dotenv import load_dotenv, find_dotenv
 from useragent import user_agent_list as USER_AGENTS
 load_dotenv(find_dotenv())
 # 开始相册
-BEGIN_ALBUM = 0
+BEGIN_ALBUM = 1
 # 设置允许爬取的分组
 ALLOW_GROUPS = [8, 10, 13]
+# 默认等待时间，单位秒
+DEFAULT_WAIT_TIME = 60
+req = requests.Session()
 
 class Spider(object):
     """主要程序类"""
@@ -29,6 +32,8 @@ class Spider(object):
         self.user_dir = None
         self.g_tk = None
         self.friends_json = None
+        self.cookies = None
+        self.cookies = {}
         self.friends_url = ('https://h5.qzone.qq.com/proxy/domain/'
                             'r.qzone.qq.com/cgi-bin/tfriend/'
                             'friend_show_qqfriends.cgi?'
@@ -49,13 +54,17 @@ class Spider(object):
         self.screen_origin_by_js = "window.scrollTo(0,0);document.getElementsByTagName('body')[0].setAttribute('haha', 'origin');"
         self.next_scroll_by_js = "window.scrollBy(0,{})"
         self.dom_remove_by_js = """
-            var wel=document.getElementById('welcomeflash');
-            document.documentElement.style.overflow = "";
-            wel && (wel.innerHTML = '');
-            wel && document.body.removeChild(wel);
-            window.QZONE && window.QZONE.Gift4Visitor && window.QZONE.Gift4Visitor.init();
-            window.g_hasWelcomeflash = 0;
+            var btn = document.getElementById("welcomeflash");
+            btn.click()
         """
+        self.by_map = {
+            'id': BY.ID,
+            'xpath': BY.XPATH,
+            'name': BY.NAME,
+            'tag': BY.TAG_NAME,
+            'class': BY.CLASS_NAME,
+            'css': BY.CSS_SELECTOR
+        }
 
     def path_handle(self, photo_file):
         """对路径字符串进行安全处理，并新建文件夹，返回处理后的字符串"""
@@ -69,14 +78,22 @@ class Spider(object):
         """初始化浏览器操作句柄"""
         chromeOptions = webdriver.ChromeOptions()
         chromeOptions.add_experimental_option("prefs", self.prefs)
+        chromeOptions.add_argument('--allow-running-insecure-content')
+        chromeOptions.add_argument('--disable-web-security')
+        chromeOptions.add_argument('--disk-cache-dir={}'.format(
+            os.path.join(os.getcwd() + 'selenium-chrome-cache')))
+        chromeOptions.add_argument('--no-referrers')
+        #chromeOptions.add_argument('--proxy-server=localhost:8118')
         chromeOptions.add_argument('lang=zh_CN.UTF-8')
         chromeOptions.add_argument(random.choice(USER_AGENTS))
         self.driver = webdriver.Chrome(
             executable_path=self.chrome_path,
             chrome_options=chromeOptions)
         self.driver.maximize_window()
+        self.driver.set_page_load_timeout(DEFAULT_WAIT_TIME)
         self.driver.get(self.base_url)
         self.login_by_cookie()
+        self.cookies_to_dict()
         self.get_friends()
 
     def login_by_cookie(self):
@@ -120,7 +137,8 @@ class Spider(object):
         #self.driver.find_element_by_id('p').send_keys(os.environ.get('num_p'))
         #self.driver.find_element_by_id('login_button').send_keys(Keys.ENTER)
         # end
-        while self.driver.current_url == self.base_url:
+        while self.driver.current_url == self.base_url \
+                or self.driver.current_url.find(self.login_url) > -1:
             time.sleep(1)
         # begin save cookie
         cookie_str = json.dumps(self.driver.get_cookies())
@@ -128,38 +146,37 @@ class Spider(object):
         print "cookies已经保存到本地"
         # end
 
+    def default_click(self):
+        welcomeflash = self.driver.find_elements(self.by_map['id'], 'welcomeflash')
+        if welcomeflash:
+            self.driver.execute_script(self.dom_remove_by_js)
+        btn_sure =  self.driver.find_elements(self.by_map['class'], 'btn-fs-sure')
+        if btn_sure:
+            btn_sure[0].click()
+
     def goto_photos(self):
         """进入空间好友相册"""
-        import ipdb; ipdb.set_trace()  # XXX BREAKPOINT
-        if self.driver.find_elements(BY.ID, 'welcomeflash'):
-            self.driver.execute_script(self.dom_remove_by_js)
-        btn_sure = self.get_ele('id', 'QM_Profile_Photo_A')
-        if len(btn_sure) > 0:
-            btn_sure[0].click()
-        el = self.get_ele('class', 'menu_item_4')
-        el[1].click()
+        self.default_click()
+        el = self.get_ele('id', 'QM_Profile_Photo_A')
+        if el:
+            el[0].click()
+        #el = self.get_ele('class', 'menu_item_4')
+        #el[1].click()
         print "进入空间好友相册"
         self.sub_frame = self.get_ele('id', "tphoto", 0)
+        self.default_click()
 
     def quit(self):
         self.driver.quit()
 
-    def get_ele(self, etype, elestr, ismany=1, wait_time=10):
+    def get_ele(self, etype, elestr, ismany=1, wait_time=DEFAULT_WAIT_TIME):
         """返回元素"""
-        by_map = {
-            'id': BY.ID,
-            'xpath': BY.XPATH,
-            'name': BY.NAME,
-            'tag': BY.TAG_NAME,
-            'class': BY.CLASS_NAME,
-            'css': BY.CSS_SELECTOR
-        }
         if ismany:
             return WebDriverWait(self.driver, wait_time).until(
-                lambda x: x.find_elements(by_map[etype], elestr))
+                lambda x: x.find_elements(self.by_map[etype], elestr))
         else:
             return WebDriverWait(self.driver, wait_time).until(
-                lambda x: x.find_element(by_map[etype], elestr))
+                lambda x: x.find_element(self.by_map[etype], elestr))
 
     def scroll_to_end(self):
         """将相册页滚动条移到最下面"""
@@ -178,7 +195,6 @@ class Spider(object):
         h = 5381
         for i in p_skey:
             h += (h<<5) + ord(i)
-        print 'g_tk', h&2147483647
         return h&2147483647
 
     def get_friends(self):
@@ -194,10 +210,34 @@ class Spider(object):
             open(self.friends_file, 'wb').write(friends_str_json)
         self.friends_json = json.loads(friends_str_json)
 
+    def download_file(self, downlist):
+        """函数功能：下载文件
+        downlist格式：[(url, dfile), (url, dfile)]"""
+        if type(downlist) != type([]):
+            downlist = [downlist]
+        for item in downlist:
+            trynum = max_try = 5
+            while trynum:
+                try:
+                    import ipdb; ipdb.set_trace()  # XXX BREAKPOINT
+                    r = requests.get(item[0], cookies=self.cookies)
+                except Exception, e:
+                    print str(max_try - trynum + 1), 'error--> url:', item[0], '--> file: ', item[1]
+                    trynum -= 1
+                if r and r.status_code == 200:
+                    print 'success--> file:', item[1]
+                    open(item[1], 'wb+').write(r.content)
+                    trynum = 0
 
-def run_execute(ct, qqnum):
+    def cookies_to_dict(self):
+        for item in self.driver.get_cookies():
+            self.cookies[item['name']] = item['value']
+
+
+# 爬虫主程序，完全基于selenium的模拟操作
+def run_execute(ct, qqnum=None):
     # 进入好友空间
-    ct.friendqq = str(qqnum) if type(qqnum) == type(1) else qqnum
+    ct.friendqq = str(qqnum) if qqnum is not None and type(qqnum) == type(1) else qqnum or ct.friendqq
     ct.driver.get(ct.user_url + ct.friendqq)
     ct.goto_photos()
     # 尝试获取昵称
@@ -208,6 +248,10 @@ def run_execute(ct, qqnum):
     select_ph = BEGIN_ALBUM
     albums = ct.get_ele('class', 'js-album-cover')
     while select_ph < len(albums):
+        ph_parents = ct.get_ele('class', 'js-album-item')[select_ph]
+        if ph_parents.get_attribute('data-question'):
+            select_ph += 1
+            continue
         ph = ct.get_ele('class', 'js-album-cover')[select_ph]
         select_ph += 1
         photo_i = 0
@@ -257,6 +301,67 @@ def run_execute(ct, qqnum):
         ct.get_ele('class', 'js-select')[0].click()
     ct.quit()
 
+def parse_url(url, query_map):
+    query_arr = []
+    for key, value in query_map.items():
+        if type(value) == type(u'type'):
+            value = value.encode('utf8')
+        query_arr.append(key + '=' + value)
+    return url + '?' + '&'.join(query_arr)
+
+# 爬虫主程序，主要基于接口处理，搭配selenium操作
+def run_execute_for_api(ct, qqnum):
+    # 进入好友空间
+    ct.friendqq = str(qqnum) if qqnum is not None and type(qqnum) == type(1) else qqnum or ct.friendqq
+    ct.driver.get(ct.user_url + ct.friendqq)
+    ct.goto_photos()
+    # 尝试获取昵称
+    names = ct.get_ele('class', 'textoverflow')
+    user_dir = ct.root_dir + os.sep + \
+        (names[1].text if len(names) > 1 else ct.friendqq)
+    ct.driver.switch_to_frame(ct.sub_frame)
+    select_ph = BEGIN_ALBUM
+    albums = ct.get_ele('class', 'js-album-item')
+    path_url = []
+    for select_ph, ph_parents in enumerate(albums):
+        if ph_parents.get_attribute('data-question'):
+            continue
+        query_map = {
+            'topicId': ph_parents.get_attribute('data-id'),
+            'pageNum': ph_parents.get_attribute('data-total'),
+            'g_tk': str(ct.g_tk),
+            'mode': '0',
+            'hostUin': ct.friendqq,
+            'uin': ct.userqq,
+            'inCharset': 'gbk',
+            'outCharset': 'gbk'
+        }
+        url = ('https://h5.qzone.qq.com'
+               '/proxy/domain/photo.qzone.qq.com/fcgi-bin/'
+               'cgi_list_photo')
+        url = parse_url(url, query_map)
+        path_url.append([user_dir, url])
+    for index, item in enumerate(path_url):
+        if index == 0:continue
+        ct.driver.get(item[1])
+        xx = ct.get_ele('tag', 'pre', 0).text.encode('utf8')[10:-2]
+        data = json.loads(xx)
+        assert data.has_key('data') and data['data'], "接口返回成功，但无数据"
+        photo_dir = os.path.join(item[0],
+                                 data['data']['topic']['name']).replace(' ', '')
+        print str(index), photo_dir
+        if not os.path.exists(photo_dir):
+            os.makedirs(photo_dir)
+        ph_list = data['data']['photoList']
+        print 'total have ', str(len(ph_list))
+        ans = []
+        for i, ph_item in enumerate(ph_list):
+            filename = os.path.join(photo_dir, ''.join(
+                ['<', str(i), '>', ph_item['name'].replace(' ', ''), '.jpg']))
+            ans.append((ph_item['url'], filename,))
+        ct.download_file(ans)
+
+
 
 if __name__ == "__main__":
     try:
@@ -264,6 +369,6 @@ if __name__ == "__main__":
         ct.driver_init()
         for item in ct.friends_json['items']:
             if item['groupid'] in ALLOW_GROUPS:
-                run_execute(ct, item['uin'])
+                run_execute_for_api(ct, item['uin'])
     except Exception, e:
         traceback.print_exc()
