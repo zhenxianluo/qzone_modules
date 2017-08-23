@@ -44,7 +44,7 @@ class Spider(object):
         self.friendqq = os.environ.get('num_f')
         self.chrome_path = os.environ.get('chrome_path')
         # 值为2时不加载图片
-        self.prefs = {"profile.managed_default_content_settings.images": 2}
+        self.prefs = {}#{"profile.managed_default_content_settings.images": 2}
         self.screen_blow_by_js = """
             var scrollTop = document.documentElement.scrollTop || window.pageYOffset || document.body.scrollTop;
             if(Math.abs(document.documentElement.scrollHeight - document.documentElement.clientHeight - scrollTop) < 10){
@@ -165,6 +165,7 @@ class Spider(object):
         print "进入空间好友相册"
         self.sub_frame = self.get_ele('id', "tphoto", 0)
         self.default_click()
+        self.cookies_to_dict()
 
     def quit(self):
         self.driver.quit()
@@ -320,7 +321,6 @@ def run_execute_for_api(ct, qqnum):
     user_dir = ct.root_dir + os.sep + \
         (names[1].text if len(names) > 1 else ct.friendqq)
     ct.driver.switch_to_frame(ct.sub_frame)
-    select_ph = BEGIN_ALBUM
     albums = ct.get_ele('class', 'js-album-item')
     path_url = []
     for select_ph, ph_parents in enumerate(albums):
