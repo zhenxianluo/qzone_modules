@@ -5,7 +5,8 @@
  | ～ | ～ | id | QM_Profile_Photo_A
 
 # 相册权限
-属性：data-priv
+属性字段：data-priv
+
 值 | 说明
 :-: | :-:
 1 | 所有人可见
