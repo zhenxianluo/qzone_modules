@@ -1,6 +1,6 @@
 # dom-map
 编号 | 是否遗弃 | 作用 | 网址 | 元素类型 | 元素名
-:-: | :-: | :-: | :-: | :-:
+:-: | :-: | :-: | :-: | :-: | :-:
 1 |  | 进入好友相册 | `https://user.qzone.qq.com/123456` | class | btn-fs-sure
 2 | 已遗弃 | ～ | ～ | id | QM\_Profile\_Photo\_A
 
