@@ -17,11 +17,11 @@
 5 | 回答问题
 
 # api-map
+## 接口对应表
 domain | path | apt-name | api-function | data-type | request-type
 :-: | :-: | :-: | :-: | :-: | :-:
 https://h5.qzone.qq.com | /proxy/domain/photo.qzone.qq.com/fcgi-bin/ | cgi_list_photo | 返回照片列表 | jsonp | GET
 https://h5.qzone.qq.com | /proxy/domain/r.qzone.qq.com/cgi-bin/tfriend/ | friend_show_qqfriends.cgi | 获取qq好友列表 | jsonp | GET
-
 
 ## 接口参数说明
 ### cgi_list_photo
