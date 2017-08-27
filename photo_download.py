@@ -15,6 +15,8 @@ ALLOW_GROUPS = [8, 10, 13]
 # 默认等待时间，单位秒
 DEFAULT_WAIT_TIME = 60
 req = requests.Session()
+# 是否显示图片，1为显示，2为不显示
+IS_SHOW_IMG = 2
 
 class Spider(object):
     """主要程序类"""
@@ -43,8 +45,6 @@ class Spider(object):
         self.userpwd = os.environ.get('num_p')
         self.friendqq = os.environ.get('num_f')
         self.chrome_path = os.environ.get('chrome_path')
-        # 值为2时不加载图片
-        self.prefs = {}#{"profile.managed_default_content_settings.images": 2}
         self.screen_blow_by_js = """
             var scrollTop = document.documentElement.scrollTop || window.pageYOffset || document.body.scrollTop;
             if(Math.abs(document.documentElement.scrollHeight - document.documentElement.clientHeight - scrollTop) < 10){
@@ -55,8 +55,9 @@ class Spider(object):
         self.next_scroll_by_js = "window.scrollBy(0,{})"
         self.dom_remove_by_js = """
             var btn = document.getElementById("welcomeflash");
-            btn.click()
+            btn.click();
         """
+        self.dom_show_by_js = """document.getElementById('tb_menu_panel').style.display = ''"""
         self.by_map = {
             'id': BY.ID,
             'xpath': BY.XPATH,
@@ -77,7 +78,9 @@ class Spider(object):
     def driver_init(self):
         """初始化浏览器操作句柄"""
         chromeOptions = webdriver.ChromeOptions()
-        chromeOptions.add_experimental_option("prefs", self.prefs)
+        # 值为2时不加载图片
+        prefs = {"profile.managed_default_content_settings.images": IS_SHOW_IMG}
+        chromeOptions.add_experimental_option("prefs", prefs)
         chromeOptions.add_argument('--allow-running-insecure-content')
         chromeOptions.add_argument('--disable-web-security')
         chromeOptions.add_argument('--disk-cache-dir={}'.format(
@@ -93,7 +96,6 @@ class Spider(object):
         self.driver.set_page_load_timeout(DEFAULT_WAIT_TIME)
         self.driver.get(self.base_url)
         self.login_by_cookie()
-        self.cookies_to_dict()
         self.get_friends()
 
     def login_by_cookie(self):
@@ -157,9 +159,14 @@ class Spider(object):
     def goto_photos(self):
         """进入空间好友相册"""
         self.default_click()
-        el = self.get_ele('id', 'QM_Profile_Photo_A')
+        # 旧方法
+        # el = self.get_ele('id', 'QM_Profile_Photo_A')
+        self.driver.execute_script(self.dom_show_by_js)
+        el = self.get_ele('class', 'menu_item_4')
         if el:
             el[0].click()
+        else:
+            raise "未找到好友空间左上角相册入口"
         #el = self.get_ele('class', 'menu_item_4')
         #el[1].click()
         print "进入空间好友相册"
@@ -211,23 +218,31 @@ class Spider(object):
             open(self.friends_file, 'wb').write(friends_str_json)
         self.friends_json = json.loads(friends_str_json)
 
-    def download_file(self, downlist):
+    def download_file(self, downlist, ispriv):
         """函数功能：下载文件
-        downlist格式：[(url, dfile), (url, dfile)]"""
+        downlist格式：[(url, dfile), (url, dfile)]
+        ispriv为False时为所有人可见"""
         if type(downlist) != type([]):
             downlist = [downlist]
+        if ispriv is True:
+            self.driver.get(downlist[0][0])
+            self.cookies_to_dict()
         for item in downlist:
             trynum = max_try = 5
             while trynum:
                 try:
-                    import ipdb; ipdb.set_trace()  # XXX BREAKPOINT
-                    r = requests.get(item[0], cookies=self.cookies)
+                    if ispriv is True:
+                        r = requests.get(item[0], cookies=self.cookies)
+                    else:
+                        r = requests.get(item[0])
+                    file_type = r.headers['Content-Type'].split('/')[1]
                 except Exception, e:
                     print str(max_try - trynum + 1), 'error--> url:', item[0], '--> file: ', item[1]
                     trynum -= 1
                 if r and r.status_code == 200:
-                    print 'success--> file:', item[1]
-                    open(item[1], 'wb+').write(r.content)
+                    file_name = item[1] + '.' + file_type
+                    print 'success--> file:', file_name
+                    open(file_name, 'wb+').write(r.content)
                     trynum = 0
 
     def cookies_to_dict(self):
@@ -324,7 +339,8 @@ def run_execute_for_api(ct, qqnum):
     albums = ct.get_ele('class', 'js-album-item')
     path_url = []
     for select_ph, ph_parents in enumerate(albums):
-        if ph_parents.get_attribute('data-question'):
+        # 需要回答问题的相册跳过
+        if ph_parents.get_attribute('data-priv') == '5':
             continue
         query_map = {
             'topicId': ph_parents.get_attribute('data-id'),
@@ -340,9 +356,9 @@ def run_execute_for_api(ct, qqnum):
                '/proxy/domain/photo.qzone.qq.com/fcgi-bin/'
                'cgi_list_photo')
         url = parse_url(url, query_map)
-        path_url.append([user_dir, url])
+        priv = ph_parents.get_attribute('data-priv')
+        path_url.append([user_dir, url, priv])
     for index, item in enumerate(path_url):
-        if index == 0:continue
         ct.driver.get(item[1])
         xx = ct.get_ele('tag', 'pre', 0).text.encode('utf8')[10:-2]
         data = json.loads(xx)
@@ -355,11 +371,12 @@ def run_execute_for_api(ct, qqnum):
         ph_list = data['data']['photoList']
         print 'total have ', str(len(ph_list))
         ans = []
+        ispriv = True if item[2] in ['4', '6', '8', '3'] else False
         for i, ph_item in enumerate(ph_list):
             filename = os.path.join(photo_dir, ''.join(
-                ['<', str(i), '>', ph_item['name'].replace(' ', ''), '.jpg']))
-            ans.append((ph_item['url'], filename,))
-        ct.download_file(ans)
+                ['<', str(i), '>', ph_item['name'].replace(' ', '')]))
+            ans.append((ph_item['url'], filename, ))
+        ct.download_file(ans, ispriv)
 
 
 
@@ -367,8 +384,12 @@ if __name__ == "__main__":
     try:
         ct = Spider()
         ct.driver_init()
+        index = 0
         for item in ct.friends_json['items']:
             if item['groupid'] in ALLOW_GROUPS:
+                index += 1
+                if index <= 4: continue
+                print item['uin'], '<----->', item['remark']
                 run_execute_for_api(ct, item['uin'])
     except Exception, e:
         traceback.print_exc()

@@ -4,6 +4,17 @@
 1 | 进入好友相册 | `https://user.qzone.qq.com/123456` | class | btn-fs-sure
  | ～ | ～ | id | QM_Profile_Photo_A
 
+# 相册权限
+属性：data-priv
+值 | 说明
+:-: | :-:
+1 | 所有人可见
+4 | qq好友可见
+6 | 部分好友可见
+8 | 部分好友可见（新）
+3 | 仅自己可见
+5 | 回答问题
+
 # api-map
 domain | path | apt-name | api-function | data-type | request-type
 :-: | :-: | :-: | :-: | :-: | :-:
