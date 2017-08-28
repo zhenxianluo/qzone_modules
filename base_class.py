@@ -110,16 +110,16 @@ class Base_class(object):
         # begin login
         login_frame = self.driver.find_element_by_id("login_frame")
         self.driver.switch_to_frame(login_frame)
-        #方法一通过重新读取二维码并显示用手机扫描，失败
+        # 方法一通过重新读取二维码并显示用手机扫描，失败
         #qr_url = self.driver.find_element_by_id('qrlogin_img').get_attribute('src')
         #qr_data = requests.get(qr_url).content
         #im = Image.open(StringIO.StringIO(qr_data))
         #im.show()
-        #方法二输入帐号及密码，登录多次后会有验证
-        #self.driver.find_element_by_id('switcher_plogin').click()
-        #self.driver.find_element_by_id('u').send_keys(os.environ.get('num'))
-        #self.driver.find_element_by_id('p').send_keys(os.environ.get('num_p'))
-        #self.driver.find_element_by_id('login_button').send_keys(Keys.ENTER)
+        # 方法二输入帐号及密码，登录多次后会有验证
+        self.driver.find_element_by_id('switcher_plogin').click()
+        self.driver.find_element_by_id('u').send_keys(os.environ.get('num'))
+        self.driver.find_element_by_id('p').send_keys(os.environ.get('num_p'))
+        self.driver.find_element_by_id('login_button').send_keys(Keys.ENTER)
         # end
         while self.driver.current_url == self.base_url \
                 or self.driver.current_url.find(self.login_url) > -1:

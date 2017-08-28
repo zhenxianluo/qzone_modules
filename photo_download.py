@@ -10,7 +10,7 @@ from useragent import user_agent_list as USER_AGENTS
 from base_class import Base_class
 load_dotenv(find_dotenv())
 # 设置允许爬取的分组
-ALLOW_GROUPS = [8, 10, 13]
+ALLOW_GROUPS = [10, 13]
 
 class Spider(Base_class):
     """主要程序类"""
@@ -156,6 +156,9 @@ def run_execute_for_api(ct, item):
     # 进入好友空间
     ct.friendqq = str(qqnum) if qqnum is not None and type(qqnum) == type(1) else qqnum or ct.friendqq
     ct.driver.get(ct.user_url + ct.friendqq)
+    if len(ct.driver.find_elements_by_id('tb_menu_panel')) == 0:
+        print '对用户：', item['remark'], '空间无访问权限'
+        return
     ct.goto_photos()
     user_dir = os.path.join(ct.root_dir, item['remark'])
     ct.driver.switch_to_frame(ct.sub_frame)
@@ -185,7 +188,9 @@ def run_execute_for_api(ct, item):
         ct.driver.get(item[1])
         xx = ct.get_ele('tag', 'pre', 0).text.encode('utf8')[10:-2]
         data = json.loads(xx)
-        assert data.has_key('data') and data['data'], "接口返回成功，但无数据"
+        if data['code'] == -4003:
+            print data['message'], "或该相册无照片"
+            continue
         photo_dir = os.path.join(item[0],
                                  data['data']['topic']['name']).replace(' ', '')
         print str(index), photo_dir
@@ -206,13 +211,12 @@ def run_execute_for_api(ct, item):
 if __name__ == "__main__":
     try:
         ct = Spider()
-        ipdb.set_trace()
         ct.driver_init()
         index = 0
         for item in ct.friends_json['items']:
             if item['groupid'] in ALLOW_GROUPS:
                 index += 1
-                if index <= -1: continue
+                if index <= 2: continue
                 print item['uin'], '<----->', item['remark']
                 run_execute_for_api(ct, item)
     except Exception, e:

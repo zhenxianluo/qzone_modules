@@ -16,6 +16,11 @@
 3 | 仅自己可见
 5 | 回答问题
 
+# api返回数据状态代码及含义
+属性名 | 值 | 说明
+:-: | :-: | :-:
+code | -4003 | 参数错误
+
 # api-map
 ## 接口对应表
 domain | path | apt-name | api-function | data-type | request-type
