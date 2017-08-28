@@ -162,7 +162,11 @@ def run_execute_for_api(ct, item):
     ct.goto_photos()
     user_dir = os.path.join(ct.root_dir, item['remark'])
     ct.driver.switch_to_frame(ct.sub_frame)
-    albums = ct.get_ele('class', 'js-album-item')
+    albums = ct.driver.find_elements(BY.CLASS_NAME, 'js-album-item')
+    if len(albums) == 0:
+        print '暂无公开相册'
+        return
+    # albums = ct.get_ele('class', 'js-album-item')
     path_url = []
     for select_ph, ph_parents in enumerate(albums):
         # 需要回答问题的相册跳过
@@ -216,7 +220,7 @@ if __name__ == "__main__":
         for item in ct.friends_json['items']:
             if item['groupid'] in ALLOW_GROUPS:
                 index += 1
-                if index <= 2: continue
+                if index <= 15: continue
                 print item['uin'], '<----->', item['remark']
                 run_execute_for_api(ct, item)
     except Exception, e:
